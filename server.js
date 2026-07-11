@@ -347,7 +347,10 @@ app.post('/api/payment/create-order', async (req, res) => {
     const options = {
       amount: amount,
       currency: currency,
-      receipt: `rcpt_${userId.replace('usr_', '')}_${Date.now().toString().slice(-5)}`
+      receipt: `rcpt_${userId.replace('usr_', '')}_${Date.now().toString().slice(-5)}`,
+      notes: {
+        website_name: "Movie Friend"
+      }
     };
 
     const order = await razorpay.orders.create(options);
