@@ -43,6 +43,60 @@ function updateUIProfile() {
   if (bannerAvatar) bannerAvatar.src = currentUser.avatarUrl;
   if (bannerName) bannerName.textContent = currentUser.name;
   if (inputName) inputName.value = currentUser.name;
+
+  // Render Subscription Tier & Badges
+  const tierBadge = document.getElementById('profile-tier-badge');
+  const sidebarTier = document.getElementById('sidebar-tier-name');
+  const trialContainer = document.getElementById('trial-time-container');
+  const trialTimeRemaining = document.getElementById('trial-time-remaining');
+  const trialTimeProgress = document.getElementById('trial-time-progress');
+  const subExpiresContainer = document.getElementById('sub-expires-container');
+  const subExpiryDays = document.getElementById('sub-expiry-days');
+
+  if (!currentUser) return;
+
+  const tier = currentUser.tier || 'free';
+
+  if (tierBadge) {
+    tierBadge.textContent = tier === 'free' ? 'Free Voyager' : `${tier.toUpperCase()} MEMBER`;
+    tierBadge.className = `px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+      tier === 'free' ? 'bg-surface-variant text-on-surface-variant border border-glass-stroke' :
+      tier === 'premium' ? 'bg-primary/20 text-primary border border-primary/30' :
+      'bg-secondary/20 text-secondary border border-secondary/30 neon-border'
+    }`;
+  }
+
+  if (sidebarTier) {
+    sidebarTier.textContent = tier;
+    sidebarTier.className = `font-bold uppercase text-xs ${
+      tier === 'free' ? 'text-on-surface' :
+      tier === 'premium' ? 'text-primary' : 'text-secondary'
+    }`;
+  }
+
+  if (tier === 'free') {
+    if (trialContainer) trialContainer.classList.remove('hidden');
+    if (subExpiresContainer) subExpiresContainer.classList.add('hidden');
+    
+    const accumulated = currentUser.accumulatedTime || 0;
+    const remainingMins = Math.max(0, 60 - Math.floor(accumulated / 60));
+    if (trialTimeRemaining) trialTimeRemaining.textContent = `${remainingMins}m left`;
+    if (trialTimeProgress) {
+      const percentage = Math.min(100, (accumulated / 3600) * 100);
+      trialTimeProgress.style.width = `${percentage}%`;
+    }
+  } else {
+    if (trialContainer) trialContainer.classList.add('hidden');
+    if (subExpiresContainer) subExpiresContainer.classList.remove('hidden');
+
+    if (currentUser.subscriptionExpiresAt) {
+      const diffTime = new Date(currentUser.subscriptionExpiresAt) - new Date();
+      const diffDays = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
+      if (subExpiryDays) subExpiryDays.textContent = `${diffDays} Day${diffDays !== 1 ? 's' : ''}`;
+    } else {
+      if (subExpiryDays) subExpiryDays.textContent = "Unlimited";
+    }
+  }
 }
 
 function renderAvatarPicker() {

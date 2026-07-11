@@ -120,6 +120,7 @@ class AuthManager {
     }
 
     this.updateNavbar();
+    this.startHeartbeat();
   }
 
   isRegistered() {
@@ -203,10 +204,22 @@ class AuthManager {
     const userControls = document.getElementById('navbar-user-controls');
     if (!userControls) return;
 
+    // Premium status text if applicable
+    let badgeHtml = '';
+    if (this.user && this.user.tier !== 'free') {
+      badgeHtml = `<span onclick="location.href='/subscription.html'" class="px-2.5 py-0.5 rounded-full bg-primary/20 text-primary border border-primary/30 text-[10px] font-bold uppercase tracking-wider cursor-pointer hover:brightness-110 active:scale-95 transition-all">${this.user.tier}</span>`;
+    } else {
+      badgeHtml = `<span onclick="location.href='/subscription.html'" class="px-2.5 py-0.5 rounded-full bg-surface-variant text-on-surface-variant border border-glass-stroke text-[10px] font-bold uppercase tracking-wider cursor-pointer hover:text-primary hover:border-primary active:scale-95 transition-all">Trial</span>`;
+    }
+
     if (this.isRegistered()) {
       userControls.innerHTML = `
         <div class="flex items-center gap-4">
+          ${badgeHtml}
           <span class="hidden md:inline text-label-md text-on-surface-variant font-medium">Hello, <span class="text-primary font-bold">${this.user.username}</span></span>
+          <button onclick="location.href='/subscription.html'" class="hidden sm:inline px-3.5 py-2 text-label-md font-bold text-primary hover:underline transition-all">
+            Plans
+          </button>
           <button onclick="auth.logout()" class="px-4 py-2 text-label-md font-bold rounded-lg border border-glass-stroke hover:border-error hover:text-error transition-all active:scale-95">
             Logout
           </button>
@@ -218,6 +231,7 @@ class AuthManager {
     } else {
       userControls.innerHTML = `
         <div class="flex items-center gap-2">
+          ${badgeHtml}
           <button onclick="auth.showAuthModal('login')" class="px-4 py-2 text-label-md font-bold text-on-surface-variant hover:text-primary transition-all active:scale-95">
             Log In
           </button>
@@ -229,6 +243,110 @@ class AuthManager {
           </div>
         </div>
       `;
+    }
+  }
+
+  startHeartbeat() {
+    this.sendHeartbeat();
+    setInterval(() => this.sendHeartbeat(), 30000);
+  }
+
+  async sendHeartbeat() {
+    const storedUserId = this.getUserId();
+    if (!storedUserId) return;
+    try {
+      const res = await fetch('/api/user/heartbeat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': storedUserId
+        }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        this.user = data.user;
+        localStorage.setItem(this.userProfileKey, JSON.stringify(this.user));
+        this.updateNavbar();
+        this.checkGatingStatus(data.isBlocked, data.accumulatedTime);
+      }
+    } catch (err) {
+      console.error("Heartbeat sync failed:", err);
+    }
+  }
+
+  checkGatingStatus(isBlocked, accumulatedTime) {
+    let blockModal = document.getElementById('subscription-block-modal');
+    if (isBlocked) {
+      if (!blockModal) {
+        blockModal = document.createElement('div');
+        blockModal.id = 'subscription-block-modal';
+        blockModal.className = 'fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black/95 backdrop-blur-2xl px-4 text-center';
+        blockModal.innerHTML = `
+          <div class="glass-panel w-full max-w-md rounded-3xl p-8 border border-primary/20 shadow-2xl relative space-y-6 bg-surface-container/95">
+            <div class="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center text-primary mx-auto animate-pulse">
+              <span class="material-symbols-outlined text-[48px]">lock</span>
+            </div>
+            <h3 class="font-display-lg text-headline-lg text-primary font-bold">1-Hour Trial Completed</h3>
+            <p class="text-on-surface-variant font-body-md leading-relaxed">
+              Your 1-hour free trial on the **Obsidian Nebula** watch party platform has ended. Subscribe now to unlock full access, private rooms, direct video uploads, and unlimited capacity watch parties!
+            </p>
+            
+            <div class="pt-4 flex flex-col gap-3">
+              <button onclick="location.href='/subscription.html'" class="w-full bg-primary text-on-primary font-bold py-4 rounded-xl hover:brightness-110 active:scale-95 transition-all text-title-md cursor-pointer shadow-lg shadow-primary/15">
+                View Subscription Plans
+              </button>
+              <button onclick="auth.logout()" class="w-full bg-surface-variant text-on-surface font-semibold py-3.5 rounded-xl hover:bg-surface-bright transition-colors active:scale-95 text-label-md">
+                Logout
+              </button>
+            </div>
+          </div>
+        `;
+        document.body.appendChild(blockModal);
+      } else {
+        blockModal.classList.remove('hidden');
+      }
+    } else {
+      if (blockModal) {
+        blockModal.classList.add('hidden');
+      }
+      
+      if (this.user && this.user.tier === 'free') {
+        const remainingSecs = Math.max(0, 3600 - (accumulatedTime || 0));
+        const remainingMins = Math.ceil(remainingSecs / 60);
+        this.updateTrialDisplay(remainingMins);
+      } else {
+        this.removeTrialDisplay();
+      }
+    }
+  }
+
+  updateTrialDisplay(mins) {
+    let display = document.getElementById('trial-countdown-badge');
+    if (!display) {
+      const navbar = document.querySelector('header') || document.querySelector('nav');
+      if (navbar) {
+        display = document.createElement('div');
+        display.id = 'trial-countdown-badge';
+        display.className = 'hidden md:flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 font-label-sm text-[11px] font-bold mr-2';
+        
+        const controls = document.getElementById('navbar-user-controls');
+        if (controls) {
+          controls.parentNode.insertBefore(display, controls);
+        } else {
+          navbar.appendChild(display);
+        }
+      }
+    }
+    if (display) {
+      display.classList.remove('hidden');
+      display.innerHTML = `<span class="material-symbols-outlined text-[14px]">hourglass_empty</span> Trial: ${mins}m left`;
+    }
+  }
+
+  removeTrialDisplay() {
+    const display = document.getElementById('trial-countdown-badge');
+    if (display) {
+      display.classList.add('hidden');
     }
   }
 

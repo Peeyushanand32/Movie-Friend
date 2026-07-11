@@ -183,6 +183,21 @@ const AVATARS = [
 // Helper to get default usernames
 const DEFAULT_NAMES = ["StellarGamer", "CyberWanderer", "NeonSpectator", "LofiCoder", "OrbitWatcher", "CosmicCurator", "SolarVibe", "VoidPulse"];
 
+// Helper to verify if user has active paid subscription
+function isSubscriptionActive(user) {
+  if (!user) return false;
+  if (user.tier === 'free') return false;
+  if (!user.subscriptionExpiresAt) return false;
+  return new Date(user.subscriptionExpiresAt) > new Date();
+}
+
+// Helper to check if free user is blocked (exceeded 1-hour trial limit)
+function isUserBlocked(user) {
+  if (!user) return true;
+  if (isSubscriptionActive(user)) return false;
+  return (user.accumulatedTime || 0) >= 3600;
+}
+
 // API Endpoint to check session / initialize user
 app.get('/api/user/session', (req, res) => {
   const userId = req.headers['x-user-id'] || req.query.userId || uuidv4();
@@ -193,10 +208,112 @@ app.get('/api/user/session', (req, res) => {
     user = db.saveUser(userId, {
       name: randomName,
       avatarUrl: randomAvatar,
+      tier: 'free',
+      accumulatedTime: 0,
+      subscriptionExpiresAt: null,
       createdAt: new Date().toISOString()
     });
   }
   res.json(user);
+});
+
+// API Endpoint for trial heartbeat (invoked every 30 seconds)
+app.post('/api/user/heartbeat', (req, res) => {
+  const userId = req.headers['x-user-id'];
+  if (!userId) {
+    return res.status(400).json({ error: "Missing x-user-id header" });
+  }
+  let user = db.getUser(userId);
+  if (!user) {
+    return res.status(404).json({ error: "User session not found" });
+  }
+
+  const activeSub = isSubscriptionActive(user);
+  if (!activeSub) {
+    const currentAccumulated = user.accumulatedTime || 0;
+    user = db.saveUser(userId, {
+      accumulatedTime: currentAccumulated + 30
+    });
+  }
+
+  const blocked = isUserBlocked(user);
+
+  // If user just got blocked, notify their active socket connection in rooms
+  if (blocked) {
+    for (const roomId in roomConnections) {
+      for (const socketId in roomConnections[roomId]) {
+        if (roomConnections[roomId][socketId].userId === userId) {
+          io.to(socketId).emit('trial-expired');
+        }
+      }
+    }
+  }
+
+  const { passwordHash, salt, ...safeUser } = user;
+  res.json({
+    accumulatedTime: safeUser.accumulatedTime,
+    tier: safeUser.tier,
+    subscriptionExpiresAt: safeUser.subscriptionExpiresAt,
+    isBlocked: blocked,
+    user: safeUser
+  });
+});
+
+// API Endpoint to process mock subscription purchases (1d, 15d, 1m, 3m, 6m, 12m)
+app.post('/api/user/subscription', (req, res) => {
+  const userId = req.headers['x-user-id'];
+  const { tier, duration, cardName, cardNumber, expiry, cvc } = req.body;
+  if (!userId) {
+    return res.status(400).json({ error: "Missing x-user-id header" });
+  }
+  const user = db.getUser(userId);
+  if (!user) {
+    return res.status(404).json({ error: "User session not found" });
+  }
+
+  if (!['free', 'premium', 'ultimate'].includes(tier)) {
+    return res.status(400).json({ error: "Invalid subscription tier" });
+  }
+
+  if (tier !== 'free') {
+    if (!duration || !['1d', '15d', '1m', '3m', '6m', '12m'].includes(duration)) {
+      return res.status(400).json({ error: "Invalid or missing subscription duration" });
+    }
+    if (!cardName || !cardNumber || !expiry || !cvc) {
+      return res.status(400).json({ error: "Payment details are required to upgrade." });
+    }
+    if (cardNumber.replace(/\s/g, '').length < 16) {
+      return res.status(400).json({ error: "Invalid card number. Must be 16 digits." });
+    }
+  }
+
+  // Calculate expiration date
+  let expirationDate = null;
+  if (tier !== 'free') {
+    const daysMap = {
+      '1d': 1,
+      '15d': 15,
+      '1m': 30,
+      '3m': 90,
+      '6m': 180,
+      '12m': 365
+    };
+    const days = daysMap[duration] || 30;
+    expirationDate = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+  }
+
+  const updatedUser = db.saveUser(userId, {
+    tier: tier,
+    subscriptionExpiresAt: expirationDate
+  });
+
+  const { passwordHash, salt, ...safeUser } = updatedUser;
+
+  res.json({
+    success: true,
+    message: tier === 'free' ? "Subscription cancelled." : `Successfully subscribed to ${tier.charAt(0).toUpperCase() + tier.slice(1)} plan!`,
+    user: safeUser
+  });
 });
 
 // API Endpoints for Authentication (Signup / Login)
@@ -253,6 +370,46 @@ app.post('/api/user/profile', (req, res) => {
 
 // API Endpoint to handle direct video uploads
 app.post('/api/upload', upload.single('video'), async (req, res) => {
+  const userId = req.headers['x-user-id'];
+  if (!userId) {
+    if (req.file) {
+      try { fs.unlinkSync(req.file.path); } catch (e) {}
+    }
+    return res.status(401).json({ error: "Missing x-user-id header. Unauthorized." });
+  }
+
+  const user = db.getUser(userId);
+  if (!user) {
+    if (req.file) {
+      try { fs.unlinkSync(req.file.path); } catch (e) {}
+    }
+    return res.status(404).json({ error: "User session not found." });
+  }
+
+  // Check trial expiration
+  if (isUserBlocked(user)) {
+    if (req.file) {
+      try { fs.unlinkSync(req.file.path); } catch (e) {}
+    }
+    return res.status(403).json({ error: "Subscription required. Your 1-hour free trial has ended." });
+  }
+
+  // Check tier permissions
+  if (user.tier === 'free') {
+    if (req.file) {
+      try { fs.unlinkSync(req.file.path); } catch (e) {}
+    }
+    return res.status(403).json({ error: "Free tier users cannot upload video files. Please upgrade to Premium or Ultimate!" });
+  }
+
+  if (req.file) {
+    const fileSize = req.file.size;
+    if (user.tier === 'premium' && fileSize > 200 * 1024 * 1024) {
+      try { fs.unlinkSync(req.file.path); } catch (e) {}
+      return res.status(403).json({ error: "Premium tier users can upload files up to 200MB. Please upgrade to Ultimate for larger uploads!" });
+    }
+  }
+
   if (!req.file) {
     return res.status(400).json({ error: "No video file was uploaded or file type is invalid" });
   }
@@ -451,6 +608,16 @@ app.post('/api/rooms', async (req, res) => {
   if (!user) {
     return res.status(404).json({ error: "User profile not found" });
   }
+
+  // Check trial expiration
+  if (isUserBlocked(user)) {
+    return res.status(403).json({ error: "Subscription required. Your 1-hour free trial has ended." });
+  }
+
+  // Check passcode permission (Premium/Ultimate only)
+  if (passcode && passcode.trim() && user.tier === 'free') {
+    return res.status(403).json({ error: "Creating passcode-protected private rooms is a Premium/Ultimate feature. Please upgrade your subscription!" });
+  }
   
   if (!title || !videoUrl) {
     return res.status(400).json({ error: "Title and Video URL are required" });
@@ -618,6 +785,13 @@ io.on('connection', (socket) => {
       return;
     }
 
+    // Trial expiration check
+    if (isUserBlocked(user)) {
+      socket.emit('error', 'Subscription required. Your 1-hour free trial has ended.');
+      socket.emit('trial-expired');
+      return;
+    }
+
     const room = db.getRoom(roomId);
     if (!room) {
       socket.emit('error', 'Room not found');
@@ -628,6 +802,21 @@ io.on('connection', (socket) => {
     if (room.passcode && room.passcode !== passcode) {
       socket.emit('error', 'Invalid passcode. Access denied.');
       return;
+    }
+
+    // Capacity limit check based on host's tier
+    if (room.hostId && room.hostId !== 'system') {
+      const hostUser = db.getUser(room.hostId);
+      const activeCount = Object.keys(roomConnections[roomId] || {}).length;
+      let limit = 5; // Default limit
+      if (hostUser && isSubscriptionActive(hostUser)) {
+        if (hostUser.tier === 'premium') limit = 15;
+        if (hostUser.tier === 'ultimate') limit = Infinity;
+      }
+      if (activeCount >= limit) {
+        socket.emit('error', `This room is at capacity based on the host's subscription plan. Limit: ${limit}.`);
+        return;
+      }
     }
 
     // Join room channel
@@ -689,6 +878,14 @@ io.on('connection', (socket) => {
 
     if (userConnection.isMuted) {
       socket.emit('error', 'You have been muted by the host.');
+      return;
+    }
+
+    // Verify if user's trial expired mid-session
+    const user = db.getUser(currentUserId);
+    if (isUserBlocked(user)) {
+      socket.emit('error', 'Subscription required. Your 1-hour free trial has ended.');
+      socket.emit('trial-expired');
       return;
     }
 

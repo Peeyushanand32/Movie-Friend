@@ -232,6 +232,19 @@ function initModal() {
       const file = fileInput.files[0];
       if (!file) return;
 
+      // Tier check for file uploads
+      if (!auth.user || auth.user.tier === 'free') {
+        alert("Free trial users cannot upload video files. Please upgrade to Premium or Ultimate!");
+        fileInput.value = '';
+        return;
+      }
+
+      if (auth.user.tier === 'premium' && file.size > 200 * 1024 * 1024) {
+        alert("Premium users can only upload files up to 200MB. Please upgrade to Ultimate for larger uploads!");
+        fileInput.value = '';
+        return;
+      }
+
       if (statusText) {
         statusText.textContent = `Selected: ${file.name} (${(file.size / (1024 * 1024)).toFixed(1)} MB)`;
       }
@@ -249,6 +262,11 @@ function initModal() {
 
       const xhr = new XMLHttpRequest();
       xhr.open('POST', '/api/upload', true);
+      
+      // Set user id header for server gating checks
+      if (userId) {
+        xhr.setRequestHeader('x-user-id', userId);
+      }
 
       xhr.upload.onprogress = (e) => {
         if (e.lengthComputable) {
@@ -312,6 +330,12 @@ function initModal() {
       const category = document.getElementById('room-category').value;
       const isPrivate = privateToggle ? privateToggle.checked : false;
       const passcode = isPrivate ? passcodeField.value.trim() : null;
+
+      // Passcode permissions gating
+      if (isPrivate && passcode && (!auth.user || auth.user.tier === 'free')) {
+        alert("Creating passcode-protected private rooms is a Premium/Ultimate feature. Please upgrade your plan!");
+        return;
+      }
 
       if (!videoUrl) {
         alert("Please enter a Video URL or upload a video file.");

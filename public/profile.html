@@ -101,6 +101,7 @@
 <div class="hidden md:flex items-center gap-8 font-title-md text-title-md">
 <a href="/lobby.html" class="text-on-surface-variant font-medium hover:text-primary transition-colors duration-200">Explore</a>
 <a href="/lobby.html" class="text-on-surface-variant font-medium hover:text-primary transition-colors duration-200">Community</a>
+<a href="/subscription.html" class="text-on-surface-variant font-medium hover:text-primary transition-colors duration-200">Subscription</a>
 </div>
 <div class="flex items-center gap-4">
 <button onclick="location.href='/lobby.html?create=true'" class="bg-primary text-on-primary font-bold px-6 py-2 rounded-full active:scale-95 transition-transform hover:brightness-110">Create Room</button>
@@ -129,6 +130,10 @@
 <span class="material-symbols-outlined text-primary">person</span>
 <span class="font-label-md text-label-md">My Profile</span>
 </a>
+<a class="text-on-surface-variant hover:bg-surface-variant rounded-xl mx-2 px-4 py-3 flex items-center gap-3 transition-all" href="/subscription.html">
+<span class="material-symbols-outlined">stars</span>
+<span class="font-label-md text-label-md">Subscription</span>
+</a>
 </nav>
 <div class="mt-auto px-4 pb-20">
 <button onclick="location.href='/lobby.html?create=true'" class="w-full bg-secondary text-on-secondary font-bold py-4 rounded-xl flex items-center justify-center gap-2 hover:brightness-110 active:scale-95 transition-transform">Go Live</button>
@@ -148,7 +153,10 @@
 </div>
 <div class="flex-grow text-center md:text-left">
 <h1 id="profile-banner-name" class="font-display-lg text-display-lg text-primary font-bold">Nebula_Voyager</h1>
+<div class="flex flex-wrap items-center justify-center md:justify-start gap-2 mt-1">
+<span id="profile-tier-badge" class="px-2.5 py-0.5 rounded-full bg-surface-variant text-on-surface-variant border border-glass-stroke text-[11px] font-bold uppercase tracking-wider">Free Trial</span>
 <p id="profile-banner-meta" class="font-body-lg text-body-lg text-text-muted">Digital Curator &amp; Night Owl</p>
+</div>
 </div>
 <div class="flex gap-3">
 <button onclick="scrollToEditor()" class="bg-surface-variant text-on-surface font-semibold px-6 py-2 rounded-xl glass-stroke hover:bg-surface-bright transition-colors active:scale-95">Edit Profile</button>
@@ -196,6 +204,34 @@
 </section>
 <!-- Sidebar Content (Friends & Activity) -->
 <aside class="md:col-span-4 space-y-6">
+<!-- Subscription Status Card -->
+<div class="rounded-3xl glass-stroke p-6 bg-surface-bright space-y-4">
+  <h3 class="font-title-md text-title-md text-on-surface font-bold flex items-center gap-2">
+    <span class="material-symbols-outlined text-primary">stars</span> Subscription Status
+  </h3>
+  <div class="space-y-3">
+    <div class="flex justify-between items-center text-sm font-label-md">
+      <span class="text-text-muted">Current Tier</span>
+      <span id="sidebar-tier-name" class="font-bold text-on-surface uppercase text-xs">Free</span>
+    </div>
+    <div id="trial-time-container" class="space-y-2">
+      <div class="flex justify-between items-center text-xs font-label-sm">
+        <span class="text-text-muted">Trial Watch Time</span>
+        <span id="trial-time-remaining" class="text-primary font-bold">60m left</span>
+      </div>
+      <div class="w-full h-1.5 bg-surface-deep rounded-full overflow-hidden border border-glass-stroke">
+        <div id="trial-time-progress" class="h-full bg-primary transition-all duration-300" style="width: 0%;"></div>
+      </div>
+    </div>
+    <div id="sub-expires-container" class="flex justify-between items-center text-sm font-label-md hidden">
+      <span class="text-text-muted font-label-sm">Expires in</span>
+      <span id="sub-expiry-days" class="text-secondary font-bold text-xs">30 Days</span>
+    </div>
+  </div>
+  <button onclick="location.href='/subscription.html'" class="w-full bg-primary/10 text-primary border border-primary/20 py-2.5 rounded-xl font-label-md text-label-md hover:bg-primary hover:text-on-primary transition-all font-semibold active:scale-95">
+    Manage Plans
+  </button>
+</div>
 <!-- Friends List -->
 <div class="rounded-3xl glass-stroke p-6 bg-surface-bright">
   <h3 class="font-title-md text-title-md text-on-surface mb-6 flex items-center justify-between font-bold">Community Picks</h3>

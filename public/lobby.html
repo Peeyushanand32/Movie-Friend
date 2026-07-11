@@ -108,6 +108,7 @@
 <nav class="hidden md:flex gap-6">
   <a href="/lobby.html" class="font-title-md text-title-md text-primary font-bold border-b-2 border-primary pb-1">Explore</a>
   <a href="/lobby.html" class="font-title-md text-title-md text-on-surface-variant font-medium hover:text-primary transition-colors duration-200">Community</a>
+  <a href="/subscription.html" class="font-title-md text-title-md text-on-surface-variant font-medium hover:text-primary transition-colors duration-200">Subscription</a>
 </nav>
 <div class="flex items-center gap-4">
 <div class="relative hidden lg:block">
@@ -163,6 +164,10 @@
 <a class="text-on-surface-variant hover:bg-surface-variant rounded-xl mx-2 px-4 py-3 flex items-center gap-3 transition-all" href="/profile.html">
 <span class="material-symbols-outlined">person</span>
 <span class="font-label-md text-label-md">My Profile</span>
+</a>
+<a class="text-on-surface-variant hover:bg-surface-variant rounded-xl mx-2 px-4 py-3 flex items-center gap-3 transition-all" href="/subscription.html">
+<span class="material-symbols-outlined">stars</span>
+<span class="font-label-md text-label-md">Subscription</span>
 </a>
 </div>
 </nav>
@@ -258,7 +263,10 @@
 
       <!-- Upload Local Video File Option -->
       <div>
-        <label for="lobby-video-file-input" class="block font-label-md text-label-md text-on-surface-variant mb-2 font-semibold">Upload Local Video</label>
+        <label for="lobby-video-file-input" class="block font-label-md text-label-md text-on-surface-variant mb-2 font-semibold flex items-center gap-1.5">
+          Upload Local Video
+          <span class="px-1.5 py-0.5 rounded bg-primary/20 text-primary text-[9px] font-bold uppercase tracking-wider">Premium+</span>
+        </label>
         <div class="relative w-full bg-surface-deep border border-dashed border-glass-stroke rounded-xl p-4 text-center cursor-pointer hover:border-primary transition-all">
           <input type="file" id="lobby-video-file-input" accept="video/mp4, video/webm, video/ogg" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
           <span class="material-symbols-outlined text-[32px] text-on-surface-variant mb-1">cloud_upload</span>
@@ -287,7 +295,10 @@
       </div>
       <!-- Private Room toggle -->
       <div class="flex items-center justify-between py-2 border-t border-glass-stroke/50 pt-4">
-        <label for="private-toggle" class="font-label-md text-label-md text-on-surface-variant font-semibold">Private Room (Passcode required)</label>
+        <label for="private-toggle" class="font-label-md text-label-md text-on-surface-variant font-semibold flex items-center gap-1.5">
+          Private Room (Passcode required)
+          <span class="px-1.5 py-0.5 rounded bg-primary/20 text-primary text-[9px] font-bold uppercase tracking-wider">Premium+</span>
+        </label>
         <input type="checkbox" id="private-toggle" class="form-checkbox h-5 w-5 text-primary bg-surface-deep border-glass-stroke rounded focus:ring-primary transition-all">
       </div>
       <!-- Passcode input (Hidden by default) -->

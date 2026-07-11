@@ -97,6 +97,17 @@ function connectSocket() {
     socket.emit('join-room', { roomId, userId, passcode: roomPasscode });
   });
 
+  socket.on('trial-expired', () => {
+    if (window.auth) auth.sendHeartbeat();
+  });
+
+  socket.on('error', (err) => {
+    alert("Error: " + err);
+    if (err.includes("trial has ended")) {
+      if (window.auth) auth.sendHeartbeat();
+    }
+  });
+
   socket.on('room-joined', ({ roomDetails, isHost: hostStatus, chatHistory, queue }) => {
     isHost = hostStatus;
     roomUrl = roomDetails.videoUrl;
@@ -471,6 +482,19 @@ function initHostControls() {
       const file = fileInput.files[0];
       if (!file) return;
 
+      // Gating checks for uploads
+      if (!auth.user || auth.user.tier === 'free') {
+        alert("Free trial users cannot upload video files. Please upgrade to Premium or Ultimate!");
+        fileInput.value = '';
+        return;
+      }
+
+      if (auth.user.tier === 'premium' && file.size > 200 * 1024 * 1024) {
+        alert("Premium users can only upload files up to 200MB. Please upgrade to Ultimate for larger uploads!");
+        fileInput.value = '';
+        return;
+      }
+
       // Update status text with file name
       if (statusText) {
         statusText.textContent = `Selected: ${file.name} (${(file.size / (1024 * 1024)).toFixed(1)} MB)`;
@@ -490,6 +514,11 @@ function initHostControls() {
 
       const xhr = new XMLHttpRequest();
       xhr.open('POST', '/api/upload', true);
+
+      // Set user id header for server gating checks
+      if (userId) {
+        xhr.setRequestHeader('x-user-id', userId);
+      }
 
       // Track Upload Progress
       xhr.upload.onprogress = (e) => {

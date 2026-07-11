@@ -64,18 +64,35 @@ function hashPassword(password, salt) {
 export const db = {
   getUser(userId) {
     const data = readDb();
-    return data.users[userId] || null;
+    const user = data.users[userId];
+    if (!user) return null;
+    return {
+      tier: 'free',
+      accumulatedTime: 0,
+      subscriptionExpiresAt: null,
+      ...user
+    };
   },
 
   getUserByUsername(username) {
     const data = readDb();
     const cleanUsername = username.toLowerCase().trim();
-    return Object.values(data.users).find(u => u.username && u.username.toLowerCase() === cleanUsername) || null;
+    const user = Object.values(data.users).find(u => u.username && u.username.toLowerCase() === cleanUsername);
+    if (!user) return null;
+    return {
+      tier: 'free',
+      accumulatedTime: 0,
+      subscriptionExpiresAt: null,
+      ...user
+    };
   },
 
   saveUser(userId, userData) {
     const data = readDb();
     data.users[userId] = {
+      tier: 'free',
+      accumulatedTime: 0,
+      subscriptionExpiresAt: null,
       ...data.users[userId],
       ...userData,
       id: userId
@@ -104,6 +121,9 @@ export const db = {
       passwordHash,
       salt,
       avatarUrl,
+      tier: 'free',
+      accumulatedTime: 0,
+      subscriptionExpiresAt: null,
       createdAt: new Date().toISOString()
     };
 
