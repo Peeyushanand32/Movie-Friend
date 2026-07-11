@@ -121,10 +121,30 @@ class AuthManager {
 
     this.updateNavbar();
     this.startHeartbeat();
+
+    // Redirect to landing page if the user is not registered and is attempting to access a protected page
+    const path = window.location.pathname;
+    const isLandingPage = path === '/' || path.endsWith('/index.html') || path === '';
+    if (!isLandingPage && !this.isRegistered()) {
+      window.location.href = '/index.html';
+      return;
+    }
   }
 
   isRegistered() {
     return this.user && !!this.user.username;
+  }
+
+  navigateToLobby(options = {}) {
+    if (this.isRegistered()) {
+      let url = '/lobby.html';
+      if (options && options.create) {
+        url += '?create=true';
+      }
+      window.location.href = url;
+    } else {
+      this.showAuthModal('login');
+    }
   }
 
   getUserId() {
@@ -238,7 +258,7 @@ class AuthManager {
           <button onclick="auth.showAuthModal('signup')" class="bg-primary-container text-on-primary-container font-bold px-4 py-2 rounded-lg hover:brightness-110 active:scale-95 transition-all text-label-md">
             Sign Up
           </button>
-          <div class="w-9 h-9 rounded-full bg-surface-container-highest overflow-hidden border border-glass-stroke cursor-pointer" onclick="location.href='/profile.html'">
+          <div class="w-9 h-9 rounded-full bg-surface-container-highest overflow-hidden border border-glass-stroke cursor-pointer" onclick="if(auth.isRegistered()){location.href='/profile.html'}else{auth.showAuthModal('login')}">
             <img class="w-full h-full object-cover" src="${this.user ? this.user.avatarUrl : ''}">
           </div>
         </div>

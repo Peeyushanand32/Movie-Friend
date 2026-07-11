@@ -105,16 +105,16 @@
 </div>
 <!-- Desktop Nav Links -->
 <div class="hidden md:flex items-center gap-8">
-<a href="/lobby.html" class="text-primary font-bold border-b-2 border-primary pb-1 font-title-md text-label-md hover:scale-105">Explore</a>
-<a class="text-on-surface-variant font-medium hover:text-primary transition-colors duration-200 font-title-md text-label-md hover:scale-105" href="/lobby.html">Community</a>
-<a class="text-on-surface-variant font-medium hover:text-primary transition-colors duration-200 font-title-md text-label-md hover:scale-105" href="/lobby.html">Rooms</a>
+<a href="javascript:auth.navigateToLobby()" class="text-primary font-bold border-b-2 border-primary pb-1 font-title-md text-label-md hover:scale-105">Explore</a>
+<a class="text-on-surface-variant font-medium hover:text-primary transition-colors duration-200 font-title-md text-label-md hover:scale-105" href="javascript:auth.navigateToLobby()">Community</a>
+<a class="text-on-surface-variant font-medium hover:text-primary transition-colors duration-200 font-title-md text-label-md hover:scale-105" href="javascript:auth.navigateToLobby()">Rooms</a>
 </div>
 <div class="flex items-center gap-4">
-<button onclick="location.href='/lobby.html?create=true'" class="hidden md:flex bg-primary-container text-on-primary-container font-bold px-4 py-2 rounded-lg active:scale-95 transition-transform font-label-md hover:brightness-110">
+<button onclick="auth.navigateToLobby({create: true})" class="hidden md:flex bg-primary-container text-on-primary-container font-bold px-4 py-2 rounded-lg active:scale-95 transition-transform font-label-md hover:brightness-110">
         Create Room
       </button>
 <div id="navbar-user-controls" class="flex items-center gap-3">
-<div class="w-8 h-8 rounded-full bg-surface-container-highest overflow-hidden border border-glass-stroke cursor-pointer" onclick="location.href='/profile.html'">
+<div class="w-8 h-8 rounded-full bg-surface-container-highest overflow-hidden border border-glass-stroke cursor-pointer" onclick="if(auth.isRegistered()){location.href='/profile.html'}else{auth.showAuthModal('login')}">
 <img id="nav-avatar" class="w-full h-full object-cover" src="">
 </div>
 </div>
@@ -136,10 +136,10 @@
         The immersive platform for friends and colleagues to share experiences through high-fidelity video, seamless gaming, and real-time interaction.
       </p>
 <div class="flex flex-col sm:flex-row gap-4">
-<button onclick="location.href='/lobby.html?create=true'" class="bg-primary-container text-on-primary-container font-bold text-title-md px-8 py-4 rounded-xl shadow-lg hover:brightness-110 active:scale-95 transition-all">
+<button onclick="auth.navigateToLobby({create: true})" class="bg-primary-container text-on-primary-container font-bold text-title-md px-8 py-4 rounded-xl shadow-lg hover:brightness-110 active:scale-95 transition-all">
           Create a Room
         </button>
-<button onclick="location.href='/lobby.html'" class="glass-card text-on-surface font-bold text-title-md px-8 py-4 rounded-xl active:scale-95 transition-all">
+<button onclick="auth.navigateToLobby()" class="glass-card text-on-surface font-bold text-title-md px-8 py-4 rounded-xl active:scale-95 transition-all">
           Explore lobby
         </button>
 </div>
@@ -258,13 +258,13 @@
 </footer>
 <!-- Bottom Nav Bar (Mobile) -->
 <div class="md:hidden fixed bottom-0 left-0 w-full flex justify-around items-center px-4 py-2 pb-safe bg-surface-container-highest/80 backdrop-blur-xl border-t border-glass-stroke z-50">
-<div onclick="location.href='/lobby.html'" class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary p-2 active:scale-90 duration-150 cursor-pointer">
+<div onclick="auth.navigateToLobby()" class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary p-2 active:scale-90 duration-150 cursor-pointer">
 <span class="material-symbols-outlined">grid_view</span>
 </div>
-<div onclick="location.href='/lobby.html'" class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary active:scale-90 duration-150 cursor-pointer">
+<div onclick="auth.navigateToLobby()" class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary active:scale-90 duration-150 cursor-pointer">
 <span class="material-symbols-outlined">door_open</span>
 </div>
-<div onclick="location.href='/profile.html'" class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary active:scale-90 duration-150 cursor-pointer">
+<div onclick="if(auth.isRegistered()){location.href='/profile.html'}else{auth.showAuthModal('login')}" class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary active:scale-90 duration-150 cursor-pointer">
 <span class="material-symbols-outlined">person</span>
 </div>
 </div>
