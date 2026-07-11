@@ -296,6 +296,41 @@ app.post('/api/upload', upload.single('video'), async (req, res) => {
   res.json({ success: true, fileUrl });
 });
 
+// API Endpoint to check Google Drive Connection status
+app.get('/api/drive-check', async (req, res) => {
+  const status = {
+    envEmailSet: !!process.env.GD_CLIENT_EMAIL,
+    envKeySet: !!process.env.GD_PRIVATE_KEY,
+    driveClientInitialized: !!driveClient,
+    localKeyFileExists: false,
+    error: null,
+    driveListTest: null
+  };
+
+  try {
+    const files = fs.readdirSync(path.resolve('.'));
+    status.localKeyFileExists = files.some(f => f.endsWith('.json') && f.startsWith('movie-'));
+  } catch (e) {
+    status.localKeyFileExistsError = e.message;
+  }
+
+  if (driveClient) {
+    try {
+      const driveRes = await driveClient.files.list({
+        pageSize: 1,
+        fields: 'files(id, name)',
+      });
+      status.driveListTest = "Success! Found " + (driveRes.data.files ? driveRes.data.files.length : 0) + " files.";
+    } catch (err) {
+      status.error = err.message;
+    }
+  } else {
+    status.error = "Drive client is not initialized.";
+  }
+
+  res.json(status);
+});
+
 // API Endpoint to list rooms
 app.get('/api/rooms', (req, res) => {
   const rooms = db.getRooms().map(room => {
