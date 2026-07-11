@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
 import fs from 'fs';
 import multer from 'multer';
+import { google } from 'googleapis';
 import { db } from './database.js';
 
 const app = express();
@@ -21,6 +22,31 @@ const PORT = process.env.PORT || 3000;
 const UPLOAD_DIR = path.resolve('public/uploads');
 if (!fs.existsSync(UPLOAD_DIR)) {
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+}
+
+// Initialize Google Drive Client (Service Account JWT)
+let driveClient = null;
+
+if (process.env.GD_CLIENT_EMAIL && process.env.GD_PRIVATE_KEY) {
+  try {
+    const auth = new google.auth.JWT(
+      process.env.GD_CLIENT_EMAIL,
+      null,
+      process.env.GD_PRIVATE_KEY.replace(/\\n/g, '\n'),
+      ['https://www.googleapis.com/auth/drive']
+    );
+    driveClient = google.drive({ version: 'v3', auth });
+    console.log("====================================================");
+    console.log("[Google Drive] Initialized client successfully.");
+    console.log("====================================================");
+  } catch (err) {
+    console.error("[Google Drive] Failed to initialize API client:", err);
+  }
+} else {
+  console.log("====================================================");
+  console.log("[Google Drive] Client email or Private key missing.");
+  console.log("[Google Drive] Falling back to local storage.");
+  console.log("====================================================");
 }
 
 // Multer Storage Configuration
@@ -184,11 +210,69 @@ app.post('/api/user/profile', (req, res) => {
 });
 
 // API Endpoint to handle direct video uploads
-app.post('/api/upload', upload.single('video'), (req, res) => {
+app.post('/api/upload', upload.single('video'), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: "No video file was uploaded or file type is invalid" });
   }
-  const fileUrl = `/uploads/${req.file.filename}`;
+
+  const localPath = req.file.path;
+  const filename = req.file.filename;
+
+  // Check if Google Drive client is configured and active
+  if (driveClient) {
+    try {
+      console.log(`[Google Drive] Uploading file to Google Drive: ${filename}`);
+
+      const fileMetadata = {
+        name: filename,
+        parents: process.env.GD_FOLDER_ID ? [process.env.GD_FOLDER_ID] : []
+      };
+
+      const media = {
+        mimeType: req.file.mimetype,
+        body: fs.createReadStream(localPath)
+      };
+
+      // 1. Upload file to Google Drive
+      const file = await driveClient.files.create({
+        requestBody: fileMetadata,
+        media: media,
+        fields: 'id'
+      });
+
+      const fileId = file.data.id;
+      console.log(`[Google Drive] File uploaded successfully. File ID: ${fileId}`);
+
+      // 2. Set public sharing permission to "Anyone with the link can view"
+      await driveClient.permissions.create({
+        fileId: fileId,
+        requestBody: {
+          role: 'reader',
+          type: 'anyone'
+        }
+      });
+      console.log(`[Google Drive] Public reader permission applied to: ${fileId}`);
+
+      // 3. Clean up the temporary local file on the server
+      try {
+        fs.unlinkSync(localPath);
+        console.log(`[Google Drive] Cleaned up temporary local file: ${filename}`);
+      } catch (unlinkErr) {
+        console.error(`[Google Drive] Warning: Failed to clean up temp file:`, unlinkErr);
+      }
+
+      // 4. Return direct download/streaming Google Drive link
+      const fileUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
+      res.json({ success: true, fileUrl });
+      return;
+    } catch (err) {
+      console.error("[Google Drive] Upload failed. Falling back to local storage:", err);
+      // Fallback: Continue execution and return local static file link below
+    }
+  }
+
+  // Fallback / Standard local storage return
+  const fileUrl = `/uploads/${filename}`;
   res.json({ success: true, fileUrl });
 });
 
