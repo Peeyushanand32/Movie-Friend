@@ -4,9 +4,84 @@ class AuthManager {
     this.user = null;
     this.userIdKey = 'userId';
     this.userProfileKey = 'userProfile';
+    this.googleClientId = null;
+    this.gsiLoaded = false;
   }
 
   async init() {
+    // Fetch Google Client ID configuration
+    try {
+      const configRes = await fetch('/api/config');
+      if (configRes.ok) {
+        const config = await configRes.json();
+        this.googleClientId = config.googleClientId;
+      }
+    } catch (err) {
+      console.error("Failed to load Google Client ID config:", err);
+    }
+
+    // Load Google Identity Services script if Client ID is configured
+    if (this.googleClientId) {
+      // Setup global callback for Google Sign-In response
+      window.handleCredentialResponse = async (response) => {
+        const errorEl = document.getElementById('auth-error-msg');
+        if (errorEl) errorEl.classList.add('hidden');
+        
+        try {
+          const res = await fetch('/api/auth/google', {
+            method: 'POST',
+            headers: { 
+              'Content-Type': 'application/json',
+              'x-user-id': this.getUserId() || ''
+            },
+            body: JSON.stringify({ token: response.credential })
+          });
+          
+          const data = await res.json();
+          if (!res.ok) {
+            throw new Error(data.error || "Google Sign-In failed");
+          }
+          
+          if (data.success) {
+            this.user = data.user;
+            localStorage.setItem(this.userIdKey, this.user.id);
+            localStorage.setItem(this.userProfileKey, JSON.stringify(this.user));
+            this.updateNavbar();
+            this.hideAuthModal();
+            // Reload if inside room or profile page to update state
+            if (window.location.pathname.includes('room.html') || window.location.pathname.includes('profile.html')) {
+              window.location.reload();
+            }
+          }
+        } catch (err) {
+          console.error("Google auth handler error:", err);
+          if (errorEl) {
+            errorEl.textContent = err.message;
+            errorEl.classList.remove('hidden');
+          }
+        }
+      };
+
+      if (!document.getElementById('google-gsi-script')) {
+        const script = document.createElement('script');
+        script.id = 'google-gsi-script';
+        script.src = 'https://accounts.google.com/gsi/client';
+        script.async = true;
+        script.defer = true;
+        script.onload = () => {
+          this.gsiLoaded = true;
+          // If modal is open when script loads, render button
+          const modal = document.getElementById('auth-modal');
+          if (modal && !modal.classList.contains('hidden')) {
+            this.renderGoogleButton();
+          }
+        };
+        document.head.appendChild(script);
+      } else {
+        this.gsiLoaded = true;
+      }
+    }
+
     const storedUserId = localStorage.getItem(this.userIdKey);
     const storedProfile = localStorage.getItem(this.userProfileKey);
 
@@ -186,6 +261,16 @@ class AuthManager {
             </button>
           </form>
           
+          <!-- Google Sign-In Option -->
+          <div id="google-signin-container" class="mt-6 hidden">
+            <div class="relative flex py-2 items-center">
+              <div class="flex-grow border-t border-glass-stroke"></div>
+              <span class="flex-shrink mx-4 text-on-surface-variant text-[11px] font-semibold uppercase tracking-wider">Or continue with</span>
+              <div class="flex-grow border-t border-glass-stroke"></div>
+            </div>
+            <div id="google-signin-btn" class="flex justify-center mt-4"></div>
+          </div>
+          
           <div class="mt-6 text-center font-body-md text-on-surface-variant">
             <span id="auth-switch-text">Don't have an account?</span>
             <button onclick="auth.switchAuthMode()" id="auth-switch-btn" class="text-primary font-bold hover:underline ml-1">Sign Up</button>
@@ -221,7 +306,33 @@ class AuthManager {
 
     this.currentMode = mode;
     this.updateAuthModalUI();
+    
+    if (this.googleClientId && this.gsiLoaded) {
+      this.renderGoogleButton();
+    }
+    
     modal.classList.remove('hidden');
+  }
+
+  renderGoogleButton() {
+    const container = document.getElementById('google-signin-container');
+    const buttonDiv = document.getElementById('google-signin-btn');
+    if (container) container.classList.remove('hidden');
+    
+    if (buttonDiv && window.google && window.google.accounts && window.google.accounts.id) {
+      try {
+        google.accounts.id.initialize({
+          client_id: this.googleClientId,
+          callback: window.handleCredentialResponse
+        });
+        google.accounts.id.renderButton(
+          buttonDiv,
+          { theme: "outline", size: "large", type: "standard", shape: "rectangular", text: "signin_with", logo_alignment: "left", width: 320 }
+        );
+      } catch (err) {
+        console.error("Error rendering Google button:", err);
+      }
+    }
   }
 
   hideAuthModal() {

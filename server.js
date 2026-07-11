@@ -7,6 +7,8 @@ import fs from 'fs';
 import multer from 'multer';
 import { google } from 'googleapis';
 import { db } from './database.js';
+import crypto from 'crypto';
+
 
 const app = express();
 const httpServer = createServer(app);
@@ -329,6 +331,81 @@ app.get('/api/drive-check', async (req, res) => {
   }
 
   res.json(status);
+});
+
+// API Endpoint to expose public configuration (like Google Client ID) to the client
+app.get('/api/config', (req, res) => {
+  res.json({
+    googleClientId: process.env.GOOGLE_CLIENT_ID || ""
+  });
+});
+
+// API Endpoint for Google Sign-In verification and login/registration
+app.post('/api/auth/google', async (req, res) => {
+  const { token } = req.body;
+  const tempUserId = req.headers['x-user-id'] || uuidv4();
+
+  if (!token) {
+    return res.status(400).json({ error: "Google credentials token is required" });
+  }
+
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  if (!clientId) {
+    return res.status(500).json({ error: "Google Client ID is not configured on the server" });
+  }
+
+  try {
+    const client = new google.auth.OAuth2(clientId);
+    const ticket = await client.verifyIdToken({
+      idToken: token,
+      audience: clientId,
+    });
+    
+    const payload = ticket.getPayload();
+    const email = payload.email;
+    const name = payload.name;
+    const picture = payload.picture;
+
+    if (!email) {
+      return res.status(400).json({ error: "Failed to retrieve email from Google token" });
+    }
+
+    // Generate safe username from email (alphanumeric and underscores only)
+    const baseUsername = email.split('@')[0].replace(/[^a-zA-Z0-9]/g, '_');
+    
+    // Check if a user is already registered with this exact username
+    let user = db.getUserByUsername(baseUsername);
+
+    if (!user) {
+      // Find if we need to resolve username collision
+      let finalUsername = baseUsername;
+      let suffix = 1;
+      while (db.getUserByUsername(finalUsername)) {
+        finalUsername = `${baseUsername}${suffix}`;
+        suffix++;
+      }
+
+      // Register new user
+      // We generate a secure random password since they authenticate through Google
+      const randomPassword = crypto.randomBytes(16).toString('hex');
+      user = db.registerUser(tempUserId, finalUsername, randomPassword, picture);
+      
+      // Update the user display name to Google profile name
+      user = db.saveUser(user.id, { name: name });
+    } else {
+      // If user exists, sync their name and avatar if needed, and log them in
+      user = db.saveUser(user.id, {
+        name: name || user.name,
+        avatarUrl: picture || user.avatarUrl
+      });
+    }
+
+    const { passwordHash, salt, ...safeUser } = user;
+    res.json({ success: true, user: safeUser });
+  } catch (err) {
+    console.error("[Google Auth] Verification failed:", err);
+    res.status(400).json({ error: "Google authentication failed: " + err.message });
+  }
 });
 
 // API Endpoint to list rooms
