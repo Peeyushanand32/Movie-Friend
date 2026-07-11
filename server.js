@@ -8,6 +8,7 @@ import multer from 'multer';
 import { google } from 'googleapis';
 import { db } from './database.js';
 import crypto from 'crypto';
+import Razorpay from 'razorpay';
 
 // Simple .env file loader for local development
 if (fs.existsSync('.env')) {
@@ -28,6 +29,22 @@ if (fs.existsSync('.env')) {
   } catch (err) {
     console.error("Error parsing local .env file:", err);
   }
+}
+
+// Initialize Razorpay Instance
+let razorpay = null;
+if (process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET) {
+  razorpay = new Razorpay({
+    key_id: process.env.RAZORPAY_KEY_ID,
+    key_secret: process.env.RAZORPAY_KEY_SECRET
+  });
+  console.log("====================================================");
+  console.log("[Razorpay] Client initialized successfully.");
+  console.log("====================================================");
+} else {
+  console.log("====================================================");
+  console.log("[Razorpay] Missing RAZORPAY_KEY_ID/SECRET env vars.");
+  console.log("====================================================");
 }
 
 const app = express();
@@ -185,17 +202,12 @@ const DEFAULT_NAMES = ["StellarGamer", "CyberWanderer", "NeonSpectator", "LofiCo
 
 // Helper to verify if user has active paid subscription
 function isSubscriptionActive(user) {
-  if (!user) return false;
-  if (user.tier === 'free') return false;
-  if (!user.subscriptionExpiresAt) return false;
-  return new Date(user.subscriptionExpiresAt) > new Date();
+  return true;
 }
 
 // Helper to check if free user is blocked (exceeded 1-hour trial limit)
 function isUserBlocked(user) {
-  if (!user) return true;
-  if (isSubscriptionActive(user)) return false;
-  return (user.accumulatedTime || 0) >= 3600;
+  return false;
 }
 
 // API Endpoint to check session / initialize user
@@ -208,10 +220,14 @@ app.get('/api/user/session', (req, res) => {
     user = db.saveUser(userId, {
       name: randomName,
       avatarUrl: randomAvatar,
-      tier: 'free',
+      tier: 'ultimate',
       accumulatedTime: 0,
       subscriptionExpiresAt: null,
       createdAt: new Date().toISOString()
+    });
+  } else if (user.tier !== 'ultimate') {
+    user = db.saveUser(userId, {
+      tier: 'ultimate'
     });
   }
   res.json(user);
