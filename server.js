@@ -27,14 +27,34 @@ if (!fs.existsSync(UPLOAD_DIR)) {
 // Initialize Google Drive Client (Service Account JWT)
 let driveClient = null;
 
-if (process.env.GD_CLIENT_EMAIL && process.env.GD_PRIVATE_KEY) {
+let gdClientEmail = process.env.GD_CLIENT_EMAIL;
+let gdPrivateKey = process.env.GD_PRIVATE_KEY;
+
+// If env variables are missing, check for a local service account JSON file in the root
+if (!gdClientEmail || !gdPrivateKey) {
   try {
-    const auth = new google.auth.JWT(
-      process.env.GD_CLIENT_EMAIL,
-      null,
-      process.env.GD_PRIVATE_KEY.replace(/\\n/g, '\n'),
-      ['https://www.googleapis.com/auth/drive']
-    );
+    const files = fs.readdirSync(path.resolve('.'));
+    const keyFile = files.find(f => f.endsWith('.json') && f.startsWith('movie-'));
+    if (keyFile) {
+      const keyData = JSON.parse(fs.readFileSync(path.resolve(keyFile), 'utf8'));
+      if (keyData.type === 'service_account') {
+        gdClientEmail = keyData.client_email;
+        gdPrivateKey = keyData.private_key;
+        console.log(`[Google Drive] Found local credentials file: ${keyFile}`);
+      }
+    }
+  } catch (err) {
+    console.error("[Google Drive] Error scanning for local credentials file:", err);
+  }
+}
+
+if (gdClientEmail && gdPrivateKey) {
+  try {
+    const auth = new google.auth.JWT({
+      email: gdClientEmail,
+      key: gdPrivateKey.replace(/\\n/g, '\n'),
+      scopes: ['https://www.googleapis.com/auth/drive']
+    });
     driveClient = google.drive({ version: 'v3', auth });
     console.log("====================================================");
     console.log("[Google Drive] Initialized client successfully.");
