@@ -71,6 +71,7 @@ function initializePlayer() {
       }
     }
   });
+  window.roomPlayer = player;
 }
 
 function startHostTimeTracking() {

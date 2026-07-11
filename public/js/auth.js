@@ -254,7 +254,8 @@ class AuthManager {
   async sendHeartbeat() {
     const storedUserId = this.getUserId();
     if (!storedUserId) return;
-    const isWatching = window.location.pathname.includes('room.html');
+    const isWatching = window.location.pathname.includes('room.html') && 
+                       (window.roomPlayer && typeof window.roomPlayer.isPlaying === 'function' && window.roomPlayer.isPlaying());
     try {
       const res = await fetch('/api/user/heartbeat', {
         method: 'POST',
