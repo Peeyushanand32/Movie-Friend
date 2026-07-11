@@ -5,4 +5,7 @@ db.json
 .DS_Store
 *.log
 .env
+render-cli/
+render.exe/
+movie-steam-502108-41b97e90332c.json
 

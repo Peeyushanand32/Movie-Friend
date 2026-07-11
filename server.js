@@ -8,7 +8,6 @@ import multer from 'multer';
 import { google } from 'googleapis';
 import { db } from './database.js';
 import crypto from 'crypto';
-import Razorpay from 'razorpay';
 
 // Simple .env file loader for local development
 if (fs.existsSync('.env')) {
@@ -31,21 +30,7 @@ if (fs.existsSync('.env')) {
   }
 }
 
-// Initialize Razorpay Instance
-let razorpay = null;
-if (process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET) {
-  razorpay = new Razorpay({
-    key_id: process.env.RAZORPAY_KEY_ID,
-    key_secret: process.env.RAZORPAY_KEY_SECRET
-  });
-  console.log("====================================================");
-  console.log("[Razorpay] Client initialized successfully.");
-  console.log("====================================================");
-} else {
-  console.log("====================================================");
-  console.log("[Razorpay] Missing RAZORPAY_KEY_ID/SECRET env vars.");
-  console.log("====================================================");
-}
+
 
 const app = express();
 const httpServer = createServer(app);
@@ -278,143 +263,48 @@ app.post('/api/user/heartbeat', (req, res) => {
   });
 });
 
-// API Endpoint to process subscription cancellation
+// API Endpoint to process mock subscription purchases (1d, 15d, 1m, 3m, 6m, 12m)
 app.post('/api/user/subscription', (req, res) => {
   const userId = req.headers['x-user-id'];
-  const { tier } = req.body;
+  const { tier, duration, cardName, cardNumber, expiry, cvc } = req.body;
   if (!userId) {
     return res.status(400).json({ error: "Missing x-user-id header" });
   }
   const user = db.getUser(userId);
   if (!user) {
     return res.status(404).json({ error: "User session not found" });
+  }
+
+  if (!['free', 'premium', 'ultimate'].includes(tier)) {
+    return res.status(400).json({ error: "Invalid subscription tier" });
   }
 
   if (tier !== 'free') {
-    return res.status(400).json({ error: "Upgrades must go through payment gateway verification." });
-  }
-
-  const updatedUser = db.saveUser(userId, {
-    tier: 'free',
-    subscriptionExpiresAt: null
-  });
-
-  const { passwordHash, salt, ...safeUser } = updatedUser;
-
-  res.json({
-    success: true,
-    message: "Subscription cancelled.",
-    user: safeUser
-  });
-});
-
-// Razorpay Payments: Create Order
-app.post('/api/payment/create-order', async (req, res) => {
-  const userId = req.headers['x-user-id'];
-  const { tier, duration } = req.body;
-  if (!userId) {
-    return res.status(400).json({ error: "Missing x-user-id header" });
-  }
-  const user = db.getUser(userId);
-  if (!user) {
-    return res.status(404).json({ error: "User session not found" });
-  }
-
-  if (!['premium', 'ultimate'].includes(tier)) {
-    return res.status(400).json({ error: "Invalid subscription tier for purchase" });
-  }
-  if (!['1d', '15d', '1m', '3m', '6m', '12m'].includes(duration)) {
-    return res.status(400).json({ error: "Invalid duration" });
-  }
-
-  const amount = 100; // Rs 1 in paise (100 paise)
-  const currency = 'INR';
-
-  // Check if we are running in Simulator Mode (unconfigured Razorpay client)
-  if (!razorpay) {
-    const mockOrderId = `order_mock_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
-    console.log(`[Payment] Creating Simulated Order: ${mockOrderId}`);
-    return res.json({
-      id: mockOrderId,
-      currency,
-      amount,
-      isMock: true,
-      key: process.env.RAZORPAY_KEY_ID || 'rzp_test_placeholder_key'
-    });
-  }
-
-  try {
-    const options = {
-      amount: amount,
-      currency: currency,
-      receipt: `rcpt_${userId.replace('usr_', '')}_${Date.now().toString().slice(-5)}`,
-      notes: {
-        website_name: "Movie Friend"
-      }
-    };
-
-    const order = await razorpay.orders.create(options);
-    console.log(`[Payment] Razorpay Order Created: ${order.id}`);
-    res.json({
-      id: order.id,
-      currency: order.currency,
-      amount: order.amount,
-      isMock: false,
-      key: process.env.RAZORPAY_KEY_ID
-    });
-  } catch (err) {
-    console.error('[Payment Create Order Catch Error]:', err);
-    res.status(400).json({
-      error: 'Razorpay failed to create payment order: ' + (err.description || err.message)
-    });
-  }
-});
-
-// Razorpay Payments: Verify Signature and Activate Subscription
-app.post('/api/payment/verify-payment', (req, res) => {
-  const userId = req.headers['x-user-id'];
-  const { razorpay_order_id, razorpay_payment_id, razorpay_signature, tier, duration } = req.body;
-  if (!userId) {
-    return res.status(400).json({ error: "Missing x-user-id header" });
-  }
-  const user = db.getUser(userId);
-  if (!user) {
-    return res.status(404).json({ error: "User session not found" });
-  }
-
-  if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
-    return res.status(400).json({ error: 'Missing payment details for verification.' });
-  }
-
-  let isValid = false;
-  
-  // Verify mock payment signature
-  if (razorpay_order_id.startsWith('order_mock_') && razorpay_payment_id.startsWith('pay_mock_')) {
-    console.log('[Payment] Verifying Mock Payment for order:', razorpay_order_id);
-    isValid = true;
-  } else if (razorpay) {
-    // Verify real signature
-    const hmac = crypto.createHmac('sha256', process.env.RAZORPAY_KEY_SECRET);
-    hmac.update(razorpay_order_id + "|" + razorpay_payment_id);
-    const generated_signature = hmac.digest('hex');
-    isValid = generated_signature === razorpay_signature;
-  }
-
-  if (!isValid) {
-    return res.status(400).json({ error: 'Invalid signature. Payment verification failed.' });
+    if (!duration || !['1d', '15d', '1m', '3m', '6m', '12m'].includes(duration)) {
+      return res.status(400).json({ error: "Invalid or missing subscription duration" });
+    }
+    if (!cardName || !cardNumber || !expiry || !cvc) {
+      return res.status(400).json({ error: "Payment details are required to upgrade." });
+    }
+    if (cardNumber.replace(/\s/g, '').length < 16) {
+      return res.status(400).json({ error: "Invalid card number. Must be 16 digits." });
+    }
   }
 
   // Calculate expiration date
-  const daysMap = {
-    '1d': 1,
-    '15d': 15,
-    '1m': 30,
-    '3m': 90,
-    '6m': 180,
-    '12m': 365
-  };
-  const days = daysMap[duration] || 30;
-  const expirationDate = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+  let expirationDate = null;
+  if (tier !== 'free') {
+    const daysMap = {
+      '1d': 1,
+      '15d': 15,
+      '1m': 30,
+      '3m': 90,
+      '6m': 180,
+      '12m': 365
+    };
+    const days = daysMap[duration] || 30;
+    expirationDate = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+  }
 
   const updatedUser = db.saveUser(userId, {
     tier: tier,
@@ -423,11 +313,9 @@ app.post('/api/payment/verify-payment', (req, res) => {
 
   const { passwordHash, salt, ...safeUser } = updatedUser;
 
-  console.log(`[Payment] Success! User ${safeUser.name} upgraded to ${tier} until ${expirationDate}`);
-
   res.json({
     success: true,
-    message: `Successfully subscribed to ${tier.charAt(0).toUpperCase() + tier.slice(1)} plan!`,
+    message: tier === 'free' ? "Subscription cancelled." : `Successfully subscribed to ${tier.charAt(0).toUpperCase() + tier.slice(1)} plan!`,
     user: safeUser
   });
 });
