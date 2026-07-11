@@ -21,13 +21,34 @@ class UnifiedPlayer {
     return 'html5'; // fallback for direct MP4 links
   }
 
+  loadYouTubeAPI() {
+    return new Promise((resolve) => {
+      if (window.YT && window.YT.Player) {
+        resolve();
+        return;
+      }
+      
+      const previousCallback = window.onYouTubeIframeAPIReady;
+      window.onYouTubeIframeAPIReady = () => {
+        if (previousCallback) previousCallback();
+        resolve();
+      };
+      
+      if (!document.querySelector('script[src="https://www.youtube.com/iframe_api"]')) {
+        const tag = document.createElement('script');
+        tag.src = "https://www.youtube.com/iframe_api";
+        document.head.appendChild(tag);
+      }
+    });
+  }
+
   async init() {
     const container = document.getElementById(this.containerId);
     if (!container) return;
     container.innerHTML = ''; // clear previous contents
 
     if (this.provider === 'youtube') {
-      await this.loadScript('https://www.youtube.com/iframe_api');
+      await this.loadYouTubeAPI();
       this.initYouTube();
     } else if (this.provider === 'vimeo') {
       await this.loadScript('https://player.vimeo.com/api/player.js');
@@ -73,9 +94,9 @@ class UnifiedPlayer {
         videoId: videoId,
         playerVars: {
           autoplay: 0,
-          controls: this.options.isHost ? 1 : 0,
+          controls: 1, // Enable controls for everyone to bypass autoplay blocks and allow volume/quality changes
           rel: 0,
-          disablekb: 1,
+          disablekb: 0,
           modestbranding: 1
         },
         events: {
